@@ -1,10 +1,13 @@
-FROM ubuntu:18.04
+FROM ubuntu:20.04
+LABEL maintainer="Thomas Fischer @Fvt"
+LABEL description="SANS ISC dshield honeypot base image"
 
-RUN apt-get update && apt-get install -y \
+# *********** Installing Prerequisites ***************
+# -qq : No output except for errors
+RUN apt-get update -qq && apt-get install -qqy \
     authbind \
     build-essential \
     curl \
-    dialog \
     gcc \
     git \ 
     jq \
@@ -23,17 +26,22 @@ RUN apt-get update && apt-get install -y \
     python3-minimal \
     python3-requests \
     python3-urllib3 \
-    python3-virtualenv \
-    randomsound \
+    python3-virtualenv \  
     rng-tools \
     sqlite3 \
     unzip \
     wamerican \
     zip \
+  # ********* do we really need the following packages?
+    dialog \
+    randomsound \       
+  # ********* Clean ****************************
+    && apt-get -qy clean \
+       autoremove \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /usr/src/dshield
-COPY . .
+COPY . /usr/src/dshield
 
 # CMD ["bin/install.sh"]
 # EXPOSE 2223
