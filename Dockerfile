@@ -37,7 +37,8 @@ RUN apt-get update -qq && apt-get install -qqy \
     dialog \
     randomsound \
   # ********* Docker specific additional packages
-    iproute2 \      
+    iproute2 \
+    systemctl \     
   # ********* Clean ****************************
     && apt-get -qy clean \
        autoremove \
@@ -61,6 +62,7 @@ ENV WEBREDIRECT="80 8080 7547 5555 9000"
 ENV HONEYPORTS="${SSHHONEYPORT} ${TELNETHONEYPORT} ${WEBHONEYPORT}"
 
 # ********* Now we run the dshield install script (docker version) inside the container
+# ********* Future may move alot of the install parts to 
 RUN bin/install-docker.sh
 
 
