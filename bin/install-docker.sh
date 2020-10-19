@@ -1,8 +1,8 @@
 #!/bin/bash
 ####
 #
-#  Install Script. run to configure various components
-#
+#  Install Script for Docker container version of dshield
+#  
 #  exit codes:
 #  9 - install error
 #  5 - user cancel
@@ -124,11 +124,11 @@ readonly myversion=75
 #
 #
 
-INTERACTIVE=1
+INTERACTIVE=0
 FAST=0
 
 # parse command line arguments
-
+# leave this in for the moment but we probably will need to update this with input for the dshield config
 for arg in "$@"; do
     case $arg in
 	"--update" | "--upgrade")
@@ -148,14 +148,19 @@ for arg in "$@"; do
 done    
 
 # target directory for server components
-TARGETDIR="/srv"
-DSHIELDDIR="${TARGETDIR}/dshield"
-COWRIEDIR="${TARGETDIR}/cowrie" # remember to also change the init.d script!
-TXTCMDS=${COWRIEDIR}/share/cowrie/txtcmds
-LOGDIR="${TARGETDIR}/log"
-WEBDIR="${TARGETDIR}/www"
+# these get loaded by the env dockerfile settings but let's check anyway; if they don't exist set them
+if [ -z ${TARGETDIR} ]; then
+   TARGETDIR="/srv"
+   DSHIELDDIR="${TARGETDIR}/dshield"
+   COWRIEDIR="${TARGETDIR}/cowrie" # remember to also change the init.d script!
+   TXTCMDS=${COWRIEDIR}/share/cowrie/txtcmds
+   LOGDIR="${TARGETDIR}/log"
+   WEBDIR="${TARGETDIR}/www"
+fi
 INSTDATE="`date +'%Y-%m-%d_%H%M%S'`"
 LOGFILE="${LOGDIR}/install_${INSTDATE}.log"
+# setting this as not default
+TMPDIR="/tmp"
 
 # which ports will be handled e.g. by cowrie (separated by blanks)
 # used e.g. for setting up block rules for trusted nets
@@ -165,36 +170,25 @@ LOGFILE="${LOGDIR}/install_${INSTDATE}.log"
 # <SVC>HONEYPORT: target ports for requests, i.e. where the honey pot daemon listens on
 # <SVC>REDIRECT: source ports for requests, i.e. which ports should be redirected to the honey pot daemon
 # HONEYPORTS: all ports a honey pot is listening on so that the firewall can be configured accordingly
-SSHHONEYPORT=2222
-TELNETHONEYPORT=2223
-WEBHONEYPORT=8000
-SSHREDIRECT="22"
-TELNETREDIRECT="23 2323"
-WEBREDIRECT="80 8080 7547 5555 9000"
-HONEYPORTS="${SSHHONEYPORT} ${TELNETHONEYPORT} ${WEBHONEYPORT}"
+if [ -z ${SSHHONEYPORT} ]; then
+   SSHHONEYPORT=2222
+   TELNETHONEYPORT=2223
+   WEBHONEYPORT=8000
+   SSHREDIRECT="22"
+   TELNETREDIRECT="23 2323"
+   WEBREDIRECT="80 8080 7547 5555 9000"
+   HONEYPORTS="${SSHHONEYPORT} ${TELNETHONEYPORT} ${WEBHONEYPORT}"
+fi
 
-
-# which port the real sshd should listen to
-SSHDPORT="12222"
+# which port the real sshd should listen to >> we don't need this, this will be set by your docker cmd or docker-compose
+# SSHDPORT="12222"
 
 # Debug Flag
 # 1 = debug logging, debug commands
 # 0 = normal logging, no extra commands
 DEBUG=1
 
-# delimiter
-LINE="#############################################################################"
-
-# dialog stuff
-: ${DIALOG_OK=0}
-: ${DIALOG_CANCEL=1}
-: ${DIALOG_HELP=2}
-: ${DIALOG_EXTRA=3}
-: ${DIALOG_ITEM_HELP=4}
-: ${DIALOG_ESC=255}
-
-export NCURSES_NO_UTF8_ACS=1
-
+# REMOVE all dialog aspects, can't do dialogs in build
 
 ###########################################################
 ## FUNCTION SECTION
@@ -307,7 +301,6 @@ do_copy () {
 ## MAIN
 ###########################################################
 
-clear
 
 ###########################################################
 ## basic checks
@@ -350,282 +343,107 @@ dlog "progdir: ${progdir}"
 
 cd $progdir
 
-if [ ! -f /etc/os-release ] ; then
-  outlog "I can not fine the /etc/os-release file. You are likely not running a supported operating systems"
-  outlog "please email info@dshield.org for help."
-  exit 9
-fi
-
-drun "cat /etc/os-release"
-drun "uname -a"
-
-dlog "sourcing /etc/os-release"
-. /etc/os-release
-
-
-dist=invalid
-
-
-if [ "$ID" == "debian" ] && [ "$VERSION_ID" == "8" ] ; then
-   dist='apt'
-   distversion=r8
-fi
-
-if [ "$ID" == "debian" ] && [ "$VERSION_ID" == "9" ] ; then
-   dist='apt'
-   distversion=r9
-fi
-
-if [ "$ID" == "raspbian" ] && [ "$VERSION_ID" == "8" ] ; then
-   dist='apt'
-   distversion=r8
-fi
-
-if [ "$ID" == "raspbian" ] && [ "$VERSION_ID" == "9" ] ; then
-   dist='apt'
-   distversion=r9
-fi
-
-if [ "$ID" == "raspbian" ] && [ "$VERSION_ID" == "10" ] ; then
-   dist='apt'
-   distversion=r10
-fi
-
-if [ "$ID" == "ubuntu" ] && [ "$VERSION_ID" == "18.04" ] ; then 
-   dist='apt'
-   distversion='u18'
-fi
-
-if [ "$ID" == "ubuntu" ] && [ "$VERSION_ID" == "20.04" ] ; then
-   dist='apt'
-   distversion='u20'
-fi
-
-
-if [ "$ID" == "amzn" ] && [ "$VERSION_ID" == "2" ] ; then 
-   dist='yum'
-   distversion=2
-fi
-
-dlog "dist: ${dist}, distversion: ${distversion}"
-
-if [ "$dist" == "invalid" ] ; then
-   outlog "You are not running a supported operating systems. Right now, this script only works for Raspbian and Ubuntu 18.04/20.04 with experimental support for Amazon AMI Linux."
-   outlog "Please ask info@dshield.org for help to add support for your flavor of Linux. Include the /etc/os-release file."
-   exit 9
-fi
-
-if [ "$ID" != "raspbian" ] && [ "$VERSION_ID" != "20.04" ] && [ "$VERSION_ID" != "18.04" ] ; then
-   outlog "ATTENTION: the latest versions of this script have been tested on Raspbian and Ubuntu 18.04/20.04 only."
-   outlog "It may or may not work with your distro. Feel free to test and contribute."
-   outlog "Press ENTER to continue, CTRL+C to abort."
-   read lala
-fi
-
-outlog "using apt to install packages"
-
-dlog "creating a temporary directory"
-
-TMPDIR=`mktemp -d -q /tmp/dshieldinstXXXXXXX`
-dlog "TMPDIR: ${TMPDIR}"
-
-dlog "setting trap"
-# trap "rm -r $TMPDIR" 0 1 2 5 15
-run 'trap "echo Log: ${LOGFILE} && rm -r $TMPDIR" 0 1 2 5 15'
-if [ "$FAST" == 0 ]; then
-   outlog "Basic security checks"
-
-   dlog "making sure default password was changed"
-
-   if [ "$dist" == "apt" ]; then
-      dlog "repair any package issues just in case"
-      run 'dpkg --configure -a' 
-      dlog "we are on pi and should check if password for user pi has been changed"
-      if $progdir/passwordtest.pl | grep -q 1; then
-         outlog "You have not yet changed the default password for the 'pi' user"
-         outlog "Change it NOW ..."
-         exit 9
-      fi
-
-
-      outlog "Updating your Installation (this can take a LOOONG time)"
-      drun 'dpkg --list'
-      run 'apt update'
-      run 'apt -y -q dist-upgrade'
-
-      outlog "Installing additional packages"
-      # OS packages: no python modules
-      # 2017-05-17: added python-virtualenv authbind for cowrie
-      # 2020-07-03: turned this into a loop to make it more reliable
-      # 2020-08-03: Added python install outside the loop for Ubuntu 18 vs 20
-      #             these two installs may fail depending on ubuntu flavor
-      # 2020-09-21: remove python2
-      run 'apt -y -q remove python2'
-      run 'apt -y -q remove python'
-      run 'apt -y -q remove python-pip'
-      run 'apt -y -q install python3-pip'      
-      run 'apt -y -q install python3-requests'
-      run 'apt -y -q remove python-requests'   
-      
-   #   for b in authbind build-essential curl dialog gcc git jq libffi-dev libmariadb-dev-compat libmpc-dev libmpfr-dev libpython-dev libssl-dev libswitch-perl libwww-perl net-tools python-dev python-requests python-urllib3 python-virtualenv python2.7-minimal python3-minimal python3-requests python3-urllib3 python3-virtualenv randomsound rng-tools sqlite3 unzip wamerican zip; do
-      for b in authbind build-essential curl dialog gcc git jq libffi-dev libmariadb-dev-compat libmpc-dev libmpfr-dev libpython3-dev libssl-dev libswitch-perl libwww-perl net-tools python3-dev python3-minimal python3-requests python3-urllib3 python3-virtualenv randomsound rng-tools sqlite3 unzip wamerican zip; do
-         run "apt -y -q install $b"
-         if ! dpkg -l $b >/dev/null 2>/dev/null; then
-         outlog "I was unable to install the $b package via apt"
-         outlog "This may be a temporary network issue. You may"
-         outlog "try and run this installer again. Or run this"
-         outlog "command as root to see if it works/returns errors"
-         outlog "apt -y install $b"
-         exit 9
-         fi
-      done
-   fi
-
-   if [ "$ID" == "amzn" ]; then
-      outlog "Updating your Operating System"
-      run 'yum -q update -y'
-      outlog "Installing additional packages"
-      run 'yum -q install -y dialog perl-libwww-perl perl-Switch rng-tools boost-random jq MySQL-python mariadb mariadb-devel iptables-services'
-   fi
-
-else
-    outlog "Skipping OS Update / Package install and security check in FAST mode"
-fi
-
-
-
 ###########################################################
-## last chance to escape before hurting the system ...
+## OS Install Parts
 ###########################################################
-if [ "$INTERACTIVE" == 1 ] ; then
-   dlog "Offering user last chance to quit with a nearly untouched system."
-   dialog --title '### WARNING ###' --colors --yesno "You are about to turn this Raspberry Pi into a honeypot. This software assumes that the device is \ZbDEDICATED\Zn to this task. There is no simple uninstall (e.g. IPv6 will be disabled). If something breaks you may need to reinstall from scratch. This script will try to do some magic in installing and configuring your to-be honeypot. But in the end \Zb\Z1YOU\Zn are responsible to configure it in a safe way and make sure it is kept up to date. An orphaned or non-monitored honeypot will become insecure! Do you want to proceed?" 0 0
-   response=$?
-   case $response in
-      ${DIALOG_CANCEL}) 
-         dlog "User clicked CANCEL"
-         outlog "Terminating installation by your command. The system shouldn't have been hurt too much yet ..."
-         outlog "See ${LOGFILE} for details."
-         exit 5
-         ;;
-      ${DIALOG_ESC})
-         dlog "User pressed ESC"
-         outlog "Terminating installation by your command. The system shouldn't have been hurt too much yet ..."
-         outlog "See ${LOGFILE} for details."
-         exit 5
-         ;;
-   esac
+# DOCKER: we don't care about this, it is set by the dockerfile
+# Chopping all OS install related aspects
+#
+# if [ ! -f /etc/os-release ] ; then
+#   outlog "I can not fine the /etc/os-release file. You are likely not running a supported operating systems"
+#   outlog "please email info@dshield.org for help."
+#   exit 9
+# fi
+#
+# <chop>...
+#
+# if [ "$ID" == "amzn" ]; then
+#    outlog "Updating your Operating System"
+#    run 'yum -q update -y'
+#    outlog "Installing additional packages"
+#    run 'yum -q install -y dialog perl-libwww-perl perl-Switch rng-tools boost-random jq MySQL-python mariadb mariadb-devel iptables-services'
+# fi
+
+# if [ ${VALUES} == "manual" ] ; then
+#    MANUPDATES=1
+# else
+#    MANUPDATES=0
+# fi
+
+# dlog "MANUPDATES: ${MANUPDATES}"
 
 
-   ###########################################################
-   ## let the user decide:
-   ## automatic updates OK?
-   ###########################################################
+# clear
 
-   dlog "Offering user choice if automatic updates are OK."
-
-   exec 3>&1
-   VALUES=$(dialog --title 'Automatic Updates' --radiolist "In future versions automatic updates of this distribution may be conducted. Please choose if you want them or if you want to keep up your dshield stuff up-to-date manually." 0 0 2 \
-      manual "" off \
-      automatic "" on \
-      2>&1 1>&3)
-
-   response=$?
-   exec 3>&-
-
-   case $response in
-      ${DIALOG_CANCEL})
-         dlog "User clicked CANCEL."
-         outlog "Terminating installation by your command. The system shouldn't have been hurt too much yet ..."
-         outlog "See ${LOGFILE} for details."
-         exit 5
-         ;;
-      ${DIALOG_ESC})
-         dlog "User pressed ESC"
-         outlog "Terminating installation by your command. The system shouldn't have been hurt too much yet ..."
-         outlog "See ${LOGFILE} for details."
-         exit 5
-         ;;
-   esac
-
-   if [ ${VALUES} == "manual" ] ; then
-      MANUPDATES=1
-   else
-      MANUPDATES=0
-   fi
-
-   dlog "MANUPDATES: ${MANUPDATES}"
-
-
-   clear
-
-fi
+# fi
+###### End OS Chop..
 
 ###########################################################
 ## Stopping Cowrie if already installed
 ###########################################################
+# DOCKER: we don't care about this, Docker build/run starts neutra
 
-if [ -x /etc/init.d/cowrie ] ; then
-   outlog "Existing cowrie startup file found, stopping cowrie."
-   run '/etc/init.d/cowrie stop'
-   outlog "... giving cowrie time to stop ..."
-   run 'sleep 10'
-   outlog "... OK."
-fi
-# in case systemd is used
-systemctl stop cowrie
+# if [ -x /etc/init.d/cowrie ] ; then
+#    outlog "Existing cowrie startup file found, stopping cowrie."
+#    run '/etc/init.d/cowrie stop'
+#    outlog "... giving cowrie time to stop ..."
+#    run 'sleep 10'
+#    outlog "... OK."
+# fi
+# # in case systemd is used
+# systemctl stop cowrie
 
-if [ "$FAST" == "0" ] ; then
+# if [ "$FAST" == "0" ] ; then
 
 ###########################################################
 ## PIP
 ###########################################################
+# DOCKER: we don't care about this, Assume we have the OS based pip installed by the dockerfile
+   # outlog "check if pip3 is already installed"
 
-   outlog "check if pip3 is already installed"
+   # run 'pip3 > /dev/null'
 
-   run 'pip3 > /dev/null'
+   # if [ ${?} -gt 0 ] ; then
+   #    outlog "no pip3 found, installing pip3"
+   #    run 'wget -qO $TMPDIR/get-pip.py https://bootstrap.pypa.io/get-pip.py'
+   #    if [ ${?} -ne 0 ] ; then
+   #       outlog "Error downloading get-pip, aborting."
+   #       exit 9
+   #    fi
+   #    run 'python3 $TMPDIR/get-pip.py'
+   #    if [ ${?} -ne 0 ] ; then
+   #       outlog "Error running get-pip3, aborting."
+   #       exit 9
+   #    fi   
+   # else
+   #    # hmmmm ...
+   #    # todo: automatic check if pip3 is OS managed or not
+   #    # check ... already done :)
 
-   if [ ${?} -gt 0 ] ; then
-      outlog "no pip3 found, installing pip3"
-      run 'wget -qO $TMPDIR/get-pip.py https://bootstrap.pypa.io/get-pip.py'
-      if [ ${?} -ne 0 ] ; then
-         outlog "Error downloading get-pip, aborting."
-         exit 9
-      fi
-      run 'python3 $TMPDIR/get-pip.py'
-      if [ ${?} -ne 0 ] ; then
-         outlog "Error running get-pip3, aborting."
-         exit 9
-      fi   
-   else
-      # hmmmm ...
-      # todo: automatic check if pip3 is OS managed or not
-      # check ... already done :)
+   #    outlog "pip3 found .... Checking which pip3 is installed...."
 
-      outlog "pip3 found .... Checking which pip3 is installed...."
+   #    drun 'pip3 -V'
+   #    drun 'pip3  -V | cut -d " " -f 4 | cut -d "/" -f 3'
+   #    drun 'find /usr -name pip3'
+   #    drun 'find /usr -name pip3 | grep -v local'
 
-      drun 'pip3 -V'
-      drun 'pip3  -V | cut -d " " -f 4 | cut -d "/" -f 3'
-      drun 'find /usr -name pip3'
-      drun 'find /usr -name pip3 | grep -v local'
+   #    # if local is in the path then it's normally not a distro package, so if we only find local, then it's OK
+   #    # - no local in pip3 -V output 
+   #    #   OR
+   #    # - pip3 below /usr without local
+   #    # -> potential distro pip3 found
+   #    if [ `pip3  -V | cut -d " " -f 4 | cut -d "/" -f 3` != "local" -o `find /usr -name pip3 | grep -v local | wc -l` -gt 0 ] ; then
+   #       # pip3 may be distro pip3
+   #       outlog "Potential distro pip3 found"
+   #    else
+   #       outlog "pip3 found which doesn't seem to be installed as a distro package. Looks ok to me."
+   #    fi
 
-      # if local is in the path then it's normally not a distro package, so if we only find local, then it's OK
-      # - no local in pip3 -V output 
-      #   OR
-      # - pip3 below /usr without local
-      # -> potential distro pip3 found
-      if [ `pip3  -V | cut -d " " -f 4 | cut -d "/" -f 3` != "local" -o `find /usr -name pip3 | grep -v local | wc -l` -gt 0 ] ; then
-         # pip3 may be distro pip3
-         outlog "Potential distro pip3 found"
-      else
-         outlog "pip3 found which doesn't seem to be installed as a distro package. Looks ok to me."
-      fi
+   # fi
 
-   fi
-
-else
-    outlog "Skipping PIP check in FAST mode"
-fi
+# else
+#     outlog "Skipping PIP check in FAST mode"
+# fi
 
 ###########################################################
 ## Random number generator
@@ -640,24 +458,31 @@ run 'echo "HRNGDEVICE=/dev/urandom" > /etc/default/rnd-tools'
 
 
 ###########################################################
-## Disable IPv6
+## DOCKER: FROM THIS POINT WE DEVIATE FROM ORIGINAL INSTALLER SCRIPT
+## many of the OS configuration aspects are not required
+## all interactive components are remove as cannot work
 ###########################################################
 
-dlog "Disabling IPv6 in /etc/modprobe.d/ipv6.conf"
-run "mv /etc/modprobe.d/ipv6.conf /etc/modprobe.d/ipv6.conf.bak"
-cat > /etc/modprobe.d/ipv6.conf <<EOF
-# Don't load ipv6 by default
-alias net-pf-10 off
-# uncommented
-alias ipv6 off
-# added
-options ipv6 disable_ipv6=1
-# this is needed for not loading ipv6 driver
-blacklist ipv6
-EOF
-run "chmod 644 /etc/modprobe.d/ipv6.conf"
-drun "cat /etc/modprobe.d/ipv6.conf.bak"
-drun "cat /etc/modprobe.d/ipv6.conf"
+###########################################################
+## Disable IPv6
+###########################################################
+# DOCKER: we don't care about this, IPv6 needs to be enabled in docker and set-up assume, that the docker user knows what he is doing
+
+# dlog "Disabling IPv6 in /etc/modprobe.d/ipv6.conf"
+# run "mv /etc/modprobe.d/ipv6.conf /etc/modprobe.d/ipv6.conf.bak"
+# cat > /etc/modprobe.d/ipv6.conf <<EOF
+# # Don't load ipv6 by default
+# alias net-pf-10 off
+# # uncommented
+# alias ipv6 off
+# # added
+# options ipv6 disable_ipv6=1
+# # this is needed for not loading ipv6 driver
+# blacklist ipv6
+# EOF
+# run "chmod 644 /etc/modprobe.d/ipv6.conf"
+# drun "cat /etc/modprobe.d/ipv6.conf.bak"
+# drun "cat /etc/modprobe.d/ipv6.conf"
 
 
 ###########################################################
@@ -684,115 +509,76 @@ if [ -f /etc/dshield.ini ] ; then
    dlog "securing dshield.ini"
    run 'chmod 600 /etc/dshield.ini'
    run 'chown root:root /etc/dshield.ini'
+
+   # Moved the check userid into the existing dshield.ini file
+   uid=$userid
+   echo "check $userid $apikey"
+   if [ "$userid" == "" ]; then
+	   echo "Docker run mode, dshield.ini has to contain a userid."
+	   exit 9
+   fi
 fi
 
-# hmmm - this SHOULD NOT happen
-if ! [ -d $TMPDIR ]; then
-   outlog "${TMPDIR} not found, aborting."
+if [ "$email" == "" ]; then
+   echo "Docker run mode, dshield.ini or arguments has to contain an email."
    exit 9
 fi
-if [ "$INTERACTIVE" == "0" ]; then
-    MANUPDATES=$manualupdates
-    uid=$userid
-    echo "check $userid $apikey"
-    if [ "$userid" == "" ]; then
-	echo "For interactive mode, dshield.ini has to contain a userid."
-	exit 9
-    fi
-    if [ "$apikey" == "" ]; then
-	echo "For interactive mode, dshield.ini has to contain an apikey."
-	exit 9
-    fi
+
+if [ "$apikey" == "" ]; then
+   echo "Docker run mode, dshield.ini or arguments has to contain an apikey."
+   exit 9
 fi
 
 ###########################################################
 ## DShield Account
 ###########################################################
+#
+# DOCKER:
+# DShield account information will need to be passed via command line or docker-secrets
+#
 
-# TODO: let the user create a dhield account instead of using an existing one
+# Let's check the dshield account information is valid
+dlog "Got email ${email} and apikey ${apikey}"
+dlog "Calculating nonce."
+nonce=`openssl rand -hex 10`
+dlog "Calculating hash."
+hash=`echo -n $email:$apikey | openssl dgst -hmac $nonce -sha512 -hex | cut -f2 -d'=' | tr -d ' '`
+dlog "Calculated nonce (${nonce}) and hash (${hash})."
 
-# dialog --title 'DShield Installer' --menu "DShield Account" 10 40 2 1 "Use Existing Account" 2 "Create New Account" 2> $TMPDIR/dialog
-# return_value=$?
-# return=`cat $TMPDIR/dialog`
+# TODO: urlencode($user)
+user=`echo $email | sed 's/+/%2b/' | sed 's/@/%40/'`
+dlog "Checking API key ..."
+run 'curl -s https://isc.sans.edu/api/checkapikey/$user/$nonce/$hash/$myversion > $TMPDIR/checkapi'
 
-return_value=$DIALOG_OK
-return=1
-if [ "$INTERACTIVE" == 1 ] ; then
-   if [ $return_value -eq  $DIALOG_OK ]; then
-      if [ $return = "1" ] ; then
-         dlog "use existing dhield account"
-         apikeyok=0
-         while [ "$apikeyok" = 0 ] ; do
-            dlog "Asking user for dshield account information"
-            exec 3>&1
-            VALUES=$(dialog --ok-label "Verify" --title "DShield Account Information" --form "Authentication Information. Copy/Past from dshield.org/myaccount.html. Use CTRL-V / SHIFT + INS to paste." 12 60 0 \
-               "E-Mail Address:" 1 2 "$email"   1 17 35 100 \
-               "       API Key:" 2 2 "$apikey" 2 17 35 100 \
-               2>&1 1>&3)
+dlog "Curl return code is ${?}"
 
-            response=$?
-            exec 3>&-
+if ! [ -d "$TMPDIR" ]; then
+   # this SHOULD NOT happpen
+   outlog "Can not find TMPDIR ${TMPDIR}"
+   exit 9
+fi
 
-            case $response in 
-               ${DIALOG_OK})
-                  email=`echo $VALUES | cut -f1 -d' '`
-                  apikey=`echo $VALUES | cut -f2 -d' '`
-                  dlog "Got email ${email} and apikey ${apikey}"
-                  dlog "Calculating nonce."
-                  nonce=`openssl rand -hex 10`
-                  dlog "Calculating hash."
-            hash=`echo -n $email:$apikey | openssl dgst -hmac $nonce -sha512 -hex | cut -f2 -d'=' | tr -d ' '`
-                  dlog "Calculated nonce (${nonce}) and hash (${hash})."
+drun "cat ${TMPDIR}/checkapi"
 
-            # TODO: urlencode($user)
-            user=`echo $email | sed 's/+/%2b/' | sed 's/@/%40/'`
-                  dlog "Checking API key ..."
-            run 'curl -s https://isc.sans.edu/api/checkapikey/$user/$nonce/$hash/$myversion > $TMPDIR/checkapi'
-      
-                  dlog "Curl return code is ${?}"
-      
-                  if ! [ -d "$TMPDIR" ]; then
-                     # this SHOULD NOT happpen
-                     outlog "Can not find TMPDIR ${TMPDIR}"
-                     exit 9
-                  fi
-      
-                  drun "cat ${TMPDIR}/checkapi"
-      
-                  dlog "Examining result of API key check ..."
-      
-                  if grep -q '<result>ok</result>' $TMPDIR/checkapi ; then
-                     apikeyok=1;
-                     uid=`grep  '<id>.*<\/id>' $TMPDIR/checkapi | sed -E 's/.*<id>([0-9]+)<\/id>.*/\1/'`
-                     dlog "API key OK, uid is ${uid}"
-                  else
-                     dlog "API key not OK, informing user"
-                     dialog --title 'API Key Failed' --msgbox 'Your API Key Verification Failed.' 7 40
-            fi
-                  ;;
-               ${DIALOG_CANCEL}) 
-                  dlog "User canceled API key dialogue."
-                  exit 5
-                  ;;
-               ${DIALOG_ESC}) 
-                  dlog "User pressed ESC in API key dialogue."
-                  exit 5
-                  ;;
-            esac;
-         done # while API not OK
+dlog "Examining result of API key check ..."
 
-      fi # use existing account or create new one
-   fi # dialogue not aborted
-
-   # echo $uid
-
-   dialog --title 'API Key Verified' --msgbox 'Your API Key is valid. The firewall will be configured next. ' 7 40
-fi # interactive mode
+if grep -q '<result>ok</result>' $TMPDIR/checkapi ; then
+   apikeyok=1;
+   uid=`grep  '<id>.*<\/id>' $TMPDIR/checkapi | sed -E 's/.*<id>([0-9]+)<\/id>.*/\1/'`
+   dlog "API key OK, uid is ${uid}"
+else
+   dlog "API key not OK, informing user"
+   exit 5
+fi
 
 ###########################################################
 ## Firewall Configuration
 ###########################################################
-
+#
+# DOCKER:
+# All network port stuff is carried out by either yoru docker run command or docker-compose, etc
+# we don't have a firewall on this
+#
 #
 # Default Interface
 #
@@ -839,7 +625,7 @@ fi # interactive mode
 ## default interface 
 ##---------------------------------------------------------
 
-dlog "firewall config: figuring out default interface"
+dlog "docker config: figuring out default interface"
 
 # if we don't have one configured, try to figure it out
 dlog "interface: ${interface}"
@@ -860,6 +646,7 @@ honeypotip=$(curl -s https://www4.dshield.org/api/myip?json  | jq .ip | tr -d '"
 
 dlog "validifs: ${validifs}"
 
+# In Docker the default interface will always be the one we use for the honeypot
 localnetok=0
 if [ "$INTERACTIVE" == 1 ] ; then
 while [ $localnetok -eq  0 ] ; do

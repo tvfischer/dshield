@@ -1,6 +1,7 @@
 FROM ubuntu:20.04
 LABEL maintainer="Thomas Fischer @Fvt"
 LABEL description="SANS ISC dshield honeypot base image"
+LABEL version="75"
 
 # *********** Installing Prerequisites ***************
 # -qq : No output except for errors
@@ -34,17 +35,38 @@ RUN apt-get update -qq && apt-get install -qqy \
     zip \
   # ********* do we really need the following packages?
     dialog \
-    randomsound \       
+    randomsound \
+  # ********* Docker specific additional packages
+    iproute2 \      
   # ********* Clean ****************************
     && apt-get -qy clean \
        autoremove \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* 
 
 WORKDIR /usr/src/dshield
 COPY . /usr/src/dshield
+
+ENV TARGETDIR="/srv"
+ENV DSHIELDDIR="${TARGETDIR}/dshield"
+ENV COWRIEDIR="${TARGETDIR}/cowrie"
+ENV TXTCMDS=${COWRIEDIR}/share/cowrie/txtcmds
+ENV LOGDIR="${TARGETDIR}/log"
+ENV WEBDIR="${TARGETDIR}/www"
+ENV SSHHONEYPORT=2222
+ENV TELNETHONEYPORT=2223
+ENV WEBHONEYPORT=8000
+ENV SSHREDIRECT="22"
+ENV TELNETREDIRECT="23 2323"
+ENV WEBREDIRECT="80 8080 7547 5555 9000"
+ENV HONEYPORTS="${SSHHONEYPORT} ${TELNETHONEYPORT} ${WEBHONEYPORT}"
+
+# ********* Now we run the dshield install script (docker version) inside the container
+RUN bin/install-docker.sh
+
 
 # CMD ["bin/install.sh"]
 # EXPOSE 2223
 # EXPOSE 2222
 # EXPOSE 8000
  
+EXPOSE ${HONEYPORTS}
