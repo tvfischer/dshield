@@ -1,10 +1,9 @@
 #!/bin/bash
 ####
 #
-#  Install Script for Docker container version of dshield
-#  This script only deploys the requried dshield software. It will do basic configuration
-#    but the dshield-entrypoint will finalise and launch the services
-#  
+#  Docker entrypoint Script for the container version of dshield
+#  The script finalise the configuration (per instance run) and starts the services
+#
 #  exit codes:
 #  9 - install error
 #  5 - user cancel
@@ -24,130 +23,9 @@ readonly myversion=75
 #
 # - V75 (Fvt)
 #   - Changes to support a full Dockerfile and docker container deployment
-#   - Added a specific docker install component
-#
-# - V74 (Freek)
-#   - webpy port to Python3 and bug fix
-#
-# - V73 (Johannes)
-#   - misc improvements to installer and documentation
-#
-# - V72 (Johannes)
-#   - version incremented for tech tuesday
-#
-# - V71 (Johannes)
-#   - upgraded cowrie version
-#   - moved to smaller cowrie zip file
-#   - updated prep.sh to match new cowrie version
-#
-# - V70 (Johannes)
-#   - added prep.sh
-#   - Ubuntu 20.04 support
-#
-# - V65 (Johannes)
-#   - bug fixes, in particular in fwlogparser
-#   - enabled debug logging in install.sh
-#
-# - V64 (Johannes)
-#   - cleanup / typos
-#
-# - V63 (Johannes)
-#   - changed to integer versions for easier handling
-#   - added "update" mode for non-interactive updates
-#
-# - V0.62 (Johannes)
-#   - modified fwlogparser.py to work better with large logs
-#     it will now only submit logs up to one day old, and not
-#     submit more than 100,000 lines per run (it should run
-#     twice an house). If there are more log, than it will skip
-#     logs on future runs.
-#
-# - V0.61 (Johannes)
-#   - redoing multiline dialogs to be more robust
-#   - adding external honeypot IP to dshield.ini
-#
-# - V0.60 (Johannes)
-#   - fixed a bug that prevented SSH logins to cowrie
-#   - upgraded to cowrie 2.0.2 (latest)
-#   - improved compatiblity with Ubuntu 18.04
-#
-# - V0.50 (Johannes)
-#   - adding support for Raspbian 10 (buster)
-#
-# - V0.49 (Johannes)
-#   - new cowrie configuration from scratch vs. using the template
-#     that is included with cowrie
-#
-# - V0.48 (Johannes)
-#   - fixed dshield logging in cowrie
-#   - remove MySQL
-#   - made local IP exclusion "wider"
-#   - added email to configuration file for convinience
-#
-# - V0.47
-#   - many small changes, see GitHub
-#
-# - V0.46 (Gebhard)
-#   - removed obsolete suff (already commented out)
-#   - added comments
-#   - some cleanup
-#   - removed mini http
-#   - added multicast disable rule to ignore multicasts for dshield logs
-#   - dito broadcasts to 255.255.255.255
-#   - ask if automatic updates are OK
-#
-# - V0.45 (Johannes)
-#    - enabled web honeypot
-#
-# - V0.44 (Johannes)
-#   - enabled telnet in cowrie
-#
-# - V0.43 (Gebhard)
-#   - revised cowrie installation to reflect current instructions
-#
-# - V0.42
-#   - quick fix for Johannes' experiments with new Python code
-#     (create dshield.ini with default values)
-#   - let user choose between old, working and experimental stuff
-#     (idea: copy all stuff but only activate that stuff the user chose
-#      so the user can experiment even if he chose mature)
-#
-# - V0.41
-#   - corrected firewall logging to dshield: in prior versions
-#     the redirected ports would be logged and reported, not
-#     the ports from the original requests (so ssh connection
-#     attempts were logged as attempts to connect to 2222)
-#   - changed firewall rules: access only allowed to honeypot ports
-#   - some configuration stuff
-#   - some bugfixes
-#
-# - V0.4
-#   - major additions and rewrites (e.g. added logging)
-#
+#   - This is the docker entry point script
 #
 
-INTERACTIVE=0
-FAST=0
-
-# parse command line arguments
-# leave this in for the moment but we probably will need to update this with input for the dshield config
-for arg in "$@"; do
-    case $arg in
-	"--update" | "--upgrade")
-	    if [ -f /etc/dshield.ini ]; then
-		echo "Non Interactive Update Mode"
-		INTERACTIVE=0
-	    else
-		echo "Update mode requires a /etc/dshield.ini file"
-		exit 9
-	    fi
-	    ;;
-	"--fast")
-	    FAST=1
-	    echo "Fast mode enabled. This will skip some dependency checks and OS updates"
-	    ;;
-    esac
-done    
 
 # target directory for server components
 # these get loaded by the env dockerfile settings but let's check anyway; if they don't exist set them
@@ -345,107 +223,6 @@ dlog "progdir: ${progdir}"
 
 cd $progdir
 
-###########################################################
-## OS Install Parts
-###########################################################
-# DOCKER: we don't care about this, it is set by the dockerfile
-# Chopping all OS install related aspects
-#
-# if [ ! -f /etc/os-release ] ; then
-#   outlog "I can not fine the /etc/os-release file. You are likely not running a supported operating systems"
-#   outlog "please email info@dshield.org for help."
-#   exit 9
-# fi
-#
-# <chop>...
-#
-# if [ "$ID" == "amzn" ]; then
-#    outlog "Updating your Operating System"
-#    run 'yum -q update -y'
-#    outlog "Installing additional packages"
-#    run 'yum -q install -y dialog perl-libwww-perl perl-Switch rng-tools boost-random jq MySQL-python mariadb mariadb-devel iptables-services'
-# fi
-
-# if [ ${VALUES} == "manual" ] ; then
-#    MANUPDATES=1
-# else
-#    MANUPDATES=0
-# fi
-
-# dlog "MANUPDATES: ${MANUPDATES}"
-
-
-# clear
-
-# fi
-###### End OS Chop..
-
-###########################################################
-## Stopping Cowrie if already installed
-###########################################################
-# DOCKER: we don't care about this, Docker build/run starts neutra
-
-# if [ -x /etc/init.d/cowrie ] ; then
-#    outlog "Existing cowrie startup file found, stopping cowrie."
-#    run '/etc/init.d/cowrie stop'
-#    outlog "... giving cowrie time to stop ..."
-#    run 'sleep 10'
-#    outlog "... OK."
-# fi
-# # in case systemd is used
-# systemctl stop cowrie
-
-# if [ "$FAST" == "0" ] ; then
-
-###########################################################
-## PIP
-###########################################################
-# DOCKER: we don't care about this, Assume we have the OS based pip installed by the dockerfile
-   # outlog "check if pip3 is already installed"
-
-   # run 'pip3 > /dev/null'
-
-   # if [ ${?} -gt 0 ] ; then
-   #    outlog "no pip3 found, installing pip3"
-   #    run 'wget -qO $TMPDIR/get-pip.py https://bootstrap.pypa.io/get-pip.py'
-   #    if [ ${?} -ne 0 ] ; then
-   #       outlog "Error downloading get-pip, aborting."
-   #       exit 9
-   #    fi
-   #    run 'python3 $TMPDIR/get-pip.py'
-   #    if [ ${?} -ne 0 ] ; then
-   #       outlog "Error running get-pip3, aborting."
-   #       exit 9
-   #    fi   
-   # else
-   #    # hmmmm ...
-   #    # todo: automatic check if pip3 is OS managed or not
-   #    # check ... already done :)
-
-   #    outlog "pip3 found .... Checking which pip3 is installed...."
-
-   #    drun 'pip3 -V'
-   #    drun 'pip3  -V | cut -d " " -f 4 | cut -d "/" -f 3'
-   #    drun 'find /usr -name pip3'
-   #    drun 'find /usr -name pip3 | grep -v local'
-
-   #    # if local is in the path then it's normally not a distro package, so if we only find local, then it's OK
-   #    # - no local in pip3 -V output 
-   #    #   OR
-   #    # - pip3 below /usr without local
-   #    # -> potential distro pip3 found
-   #    if [ `pip3  -V | cut -d " " -f 4 | cut -d "/" -f 3` != "local" -o `find /usr -name pip3 | grep -v local | wc -l` -gt 0 ] ; then
-   #       # pip3 may be distro pip3
-   #       outlog "Potential distro pip3 found"
-   #    else
-   #       outlog "pip3 found which doesn't seem to be installed as a distro package. Looks ok to me."
-   #    fi
-
-   # fi
-
-# else
-#     outlog "Skipping PIP check in FAST mode"
-# fi
 
 ###########################################################
 ## Random number generator
@@ -616,7 +393,6 @@ dlog "Interface: $interface"
 ##---------------------------------------------------------
 ## figuring out local network
 ##---------------------------------------------------------
-# DOCKER: Leaving this here to get default values when building
 
 dlog "firewall config: figuring out local network"
 
@@ -681,73 +457,12 @@ dlog "final values: "
 dlog "NOHONEYIPS: ${NOHONEYIPS} / NOHONEYPORTS: ${NOHONEYPORTS}"
 dlog "nohoneyips: ${nohoneyips} / nohoneyports: ${nohoneyports}"
 
-##---------------------------------------------------------
-## create actual firewall rule set
-##---------------------------------------------------------
-#
-# DOCKER: NO Firewall in container....
-#         Redirection happens in the docker run command
-#
-
-
-###########################################################
-## Change real SSHD port
-###########################################################
-# DOCKER: no SSH deamon, connect via an docker exec command
-
-
-###########################################################
-## Modifying syslog config
-###########################################################
-dlog "setting interface in syslog config"
-# no %%interface%% in dshield.conf template anymore, so only copying file
-# run 'sed "s/%%interface%%/$interface/" < $progdir/../etc/rsyslog.d/dshield.conf > /etc/rsyslog.d/dshield.conf'
-do_copy $progdir/../etc/rsyslog.d/dshield.conf /etc/rsyslog.d 600
-
-drun 'cat /etc/rsyslog.d/dshield.conf'
-
-###########################################################
-## Further copying / configuration
-###########################################################
-
-
-#
-# moving dshield stuff to target directory
-# (don't like to have root run scripty which are not owned by root)
-#
-
-run "mkdir -p ${DSHIELDDIR}"
-do_copy $progdir/../srv/dshield/fwlogparser.py ${DSHIELDDIR} 700
-do_copy $progdir/../srv/dshield/weblogsubmit.py ${DSHIELDDIR} 700
-do_copy $progdir/../srv/dshield/DShield.py ${DSHIELDDIR} 700
-
 # check: automatic updates allowed?
-# set this in the entrypoint script so it is valid for each image run
-# if [ "$MANUPDATES" -eq  "0" ]; then
-#    dlog "automatic updates OK, configuring"
-#    run 'touch ${DSHIELDDIR}/auto-update-ok'
-# fi
 
-
-#
-# "random" offset for cron job so not everybody is reporting at once
-#
-
-dlog "creating /etc/cron.d/dshield"
-offset1=`shuf -i0-29 -n1`
-offset2=$((offset1+30));
-echo "${offset1},${offset2} * * * * root cd ${DSHIELDDIR}; ./weblogsubmit.py" > /etc/cron.d/dshield 
-echo "${offset1},${offset2} * * * * root ${DSHIELDDIR}/fwlogparser.py" >> /etc/cron.d/dshield
-offset1=`shuf -i0-59 -n1`
-offset2=`shuf -i0-23 -n1`
-echo "${offset1} ${offset2} * * * root cd ${progdir}; ./update.sh --cron >/dev/null " >> /etc/cron.d/dshield
-offset1=`shuf -i0-59 -n1`
-offset2=`shuf -i0-23 -n1`
-echo "${offset1} ${offset2} * * * root /sbin/reboot" >> /etc/cron.d/dshield
-
-
-drun 'cat /etc/cron.d/dshield'
-
+if [ "$MANUPDATES" -eq  "0" ]; then
+   dlog "automatic updates OK, configuring"
+   run 'touch ${DSHIELDDIR}/auto-update-ok'
+fi
 
 #
 # Update dshield Configuration
@@ -759,7 +474,7 @@ if [ -f /etc/dshield.ini ]; then
    run 'mv /etc/dshield.ini /etc/dshield.ini.${INSTDATE}'
 fi
 
-# new shiny config file
+# new shiny config file LIN 761
 run 'touch /etc/dshield.ini'
 run 'chmod 600 /etc/dshield.ini'
 run 'echo "[DShield]" >> /etc/dshield.ini'
@@ -793,153 +508,48 @@ drun 'cat /etc/dshield.ini'
 
 
 ###########################################################
-## Installation of cowrie
+## Finalisation of cowrie set-up
 ###########################################################
 
+outlog "Doing further cowrie configuration."
 
-#
-# installing cowrie
-# TODO: don't use a static path but a configurable one
-#
-# 2017-05-17: revised section to reflect current installation instructions
-#             https://github.com/micheloosterhof/cowrie/blob/master/INSTALL.md
-#
+# step 6 (Generate a DSA key)
+dlog "generating cowrie SSH hostkey"
+run "ssh-keygen -t dsa -b 1024 -N '' -f ${COWRIEDIR}/var/lib/cowrie/ssh_host_dsa_key "
 
-dlog "installing cowrie"
+# step 5 (Install configuration file)
+dlog "copying cowrie.cfg and adding entries"
+# adjust cowrie.cfg
+export uid
+export apikey
+export hostname=`shuf /usr/share/dict/american-english | head -1 | sed 's/[^a-z]//g'`
+export sensor_name=dshield-$uid-$version
+fake1=`shuf -i 1-255 -n 1`
+fake2=`shuf -i 1-255 -n 1`
+fake3=`shuf -i 1-255 -n 1`
+export fake_addr=`printf "10.%d.%d.%d" $fake1 $fake2 $fake3`
+export arch=`arch`
+export kernel_version=`uname -r`
+export kernel_build_string=`uname -v | sed 's/SMP.*/SMP/'`
+export ssh_version=`ssh -V 2>&1 | cut -f1 -d','`
+export ttylog='false'
+drun "cat ..${COWRIEDIR}/cowrie.cfg | envsubst > ${COWRIEDIR}/cowrie.cfg"
 
-# step 1 (Install OS dependencies): done
- 
-# step 2 (Create a user account)
-dlog "checking if cowrie OS user already exists"
-if ! grep '^cowrie:' -q /etc/passwd; then
-   dlog "... no, creating"
-   run "adduser --gecos 'Honeypot,A113,555-1212,555-1212' --disabled-password --quiet --home ${COWRIEDIR} --no-create-home cowrie"
-   outlog "Added user 'cowrie'"
-else
-   outlog "User 'cowrie' already exists in OS. Making no changes to OS user."
-fi
+# make output of simple text commands more real
 
-# step 3 (Checkout the code)
-# (we will stay with zip instead of using GIT for the time being)
-dlog "downloading and unzipping cowrie"
-run "wget -qO $TMPDIR/cowrie.zip https://www.dshield.org/cowrie.zip"
+dlog "creating output for text commands"
 
-
-if [ ${?} -ne 0 ] ; then
-   outlog "Something went wrong downloading cowrie, ZIP corrupt."
-   exit 9
-fi
-if [ -f $TMPDIR/cowrie.zip ]; then
-  run "unzip -qq -d $TMPDIR $TMPDIR/cowrie.zip "
-else 
-  outlog "Can not find cowrie.zip in $TMPDIR"
-  exit 9
-fi
-if [ -d ${COWRIEDIR} ]; then
-   dlog "old cowrie installation found, moving"
-   run "mv ${COWRIEDIR} ${COWRIEDIR}.${INSTDATE}"
-fi
-dlog "moving extracted cowrie to ${COWRIEDIR}"
-if [ -d $TMPDIR/cowrie-master ]; then
- run "mv $TMPDIR/cowrie-master ${COWRIEDIR}"
-else
- outlog "$TMPDIR/cowrie not found"
- exit 9
-fi
-
-# step 4 (Setup Virtual Environment)
-outlog "Installing Python packages with PIP. This will take a LOOONG time."
-OLDDIR=`pwd`
-cd ${COWRIEDIR}
-dlog "setting up virtual environment"
-run 'virtualenv cowrie-env'
-dlog "activating virtual environment"
-run 'source cowrie-env/bin/activate'
-dlog "installing dependencies: requirements.txt"
-run 'pip3 install --upgrade pip3'
-run 'pip3 install --upgrade -r requirements.txt'
-run 'pip3 install --upgrade -r requirements-output.txt'
-run 'pip3 install --upgrade bcrypt'
-run 'pip3 install --upgrade pip3'
-run 'pip3 install --upgrade -r requirements.txt'
-run 'pip3 install --upgrade -r requirements-output.txt'
-run 'pip3 install --upgrade bcrypt'
-run 'pip3 install --upgrade requests'
-if [ ${?} -ne 0 ] ; then
-   outlog "Error installing dependencies from requirements.txt. See ${LOGFILE} for details.
-
-   This part often fails due to timeouts from the servers hosting python packages. Best to try to rerun the install script again. It should remember your settings.
-"
-   exit 9
-fi
-
-# installing python dependencies. Most of these are for cowrie.
-run 'pip3 install -r requirements.txt'
-cd ${OLDDIR}
-
-
-### This section moved to entrypoint to create per instance values
-outlog "Entrypoint for docker does further cowrie configuration."
-
-# # step 6 (Generate a DSA key)
-# dlog "generating cowrie SSH hostkey"
-# run "ssh-keygen -t dsa -b 1024 -N '' -f ${COWRIEDIR}/var/lib/cowrie/ssh_host_dsa_key "
-
-# # step 5 (Install configuration file)
-# dlog "copying cowrie.cfg and adding entries"
-# # adjust cowrie.cfg
-# export uid
-# export apikey
-# export hostname=`shuf /usr/share/dict/american-english | head -1 | sed 's/[^a-z]//g'`
-# export sensor_name=dshield-$uid-$version
-# fake1=`shuf -i 1-255 -n 1`
-# fake2=`shuf -i 1-255 -n 1`
-# fake3=`shuf -i 1-255 -n 1`
-# export fake_addr=`printf "10.%d.%d.%d" $fake1 $fake2 $fake3`
-# export arch=`arch`
-# export kernel_version=`uname -r`
-# export kernel_build_string=`uname -v | sed 's/SMP.*/SMP/'`
-# export ssh_version=`ssh -V 2>&1 | cut -f1 -d','`
-# export ttylog='false'
-# drun "cat ..${COWRIEDIR}/cowrie.cfg | envsubst > ${COWRIEDIR}/cowrie.cfg"
-
-# # make output of simple text commands more real
-
-# dlog "creating output for text commands"
-
-# run "mkdir -p ${TXTCMDS}/bin"
-# run "mkdir -p ${TXTCMDS}/usr/bin"
-# run "df > ${TXTCMDS}/bin/df"
-# run "dmesg > ${TXTCMDS}/bin/dmesg"
-# run "mount > ${TXTCMDS}/bin/mount"
-# run "ulimit > ${TXTCMDS}/bin/ulimit"
-# run "lscpu > ${TXTCMDS}/usr/bin/lscpu"
-# run "echo '-bash: emacs: command not found' > ${TXTCMDS}/usr/bin/emacs"
-# run "echo '-bash: locate: command not found' > ${TXTCMDS}/usr/bin/locate"
+run "mkdir -p ${TXTCMDS}/bin"
+run "mkdir -p ${TXTCMDS}/usr/bin"
+run "df > ${TXTCMDS}/bin/df"
+run "dmesg > ${TXTCMDS}/bin/dmesg"
+run "mount > ${TXTCMDS}/bin/mount"
+run "ulimit > ${TXTCMDS}/bin/ulimit"
+run "lscpu > ${TXTCMDS}/usr/bin/lscpu"
+run "echo '-bash: emacs: command not found' > ${TXTCMDS}/usr/bin/emacs"
+run "echo '-bash: locate: command not found' > ${TXTCMDS}/usr/bin/locate"
 
 run 'chown -R cowrie:cowrie ${COWRIEDIR}'
-
-# echo "###########  $progdir  ###########"
-
-dlog "copying cowrie system files"
-
-do_copy $progdir/../lib/systemd/system/cowrie.service /lib/systemd/system/cowrie.service 644
-do_copy $progdir/../etc/cron.hourly/cowrie /etc/cron.hourly 755
-
-# make sure to remove old cowrie start if they exist
-if [ -f /etc/init.d/cowrie ] ; then
-    rm -f /etc/init.d/cowrie
-fi
-run 'mkdir ${COWRIEDIR}/log'
-run 'chmod 755 ${COWRIEDIR}/log'
-run 'chown cowrie:cowrie ${COWRIEDIR}/log'
-run 'mkdir ${COWRIEDIR}/log/tty'
-run 'chmod 755 ${COWRIEDIR}/log/tty'
-run 'chown cowrie:cowrie ${COWRIEDIR}/log/tty'
-find /etc/rc?.d -name '*cowrie*' -delete
-run 'systemctl daemon-reload'
-run 'systemctl enable cowrie.service'
-
 
 ###########################################################
 ## Installation of web honeypot
@@ -985,98 +595,54 @@ fi
 ###########################################################
 ## Remove old mini-httpd stuff (if run as an update)
 ###########################################################
-## This is moved to the entrypoint script which would be main update part, any new build would generate a new env.
 
-# dlog "removing old mini-httpd stuff"
-# if [ -f /etc/mini-httpd.conf ] ; then
-#    mv /etc/mini-httpd.conf /etc/mini-httpd.conf.${INSTDATE}
-# fi
-# if [ -f /etc/default/mini-httpd ] ; then
-#    run 'update-rc.d mini-httpd disable'
-#    run 'update-rc.d -f mini-httpd remove'
-#    mv /etc/default/mini-httpd /etc/default/.mini-httpd.${INSTDATE}
-# fi
-
-
-
-###########################################################
-## Setting up Services
-###########################################################
-
-
-# setting up services
-dlog "setting up services: cowrie"
-run 'update-rc.d cowrie defaults'
-# run 'update-rc.d mini-httpd defaults'
-
-
-###########################################################
-## Setting up postfix
-###########################################################
-
-    outlog "Installing and configuring postfix."
-   #  dlog "uninstalling postfix"
-   #  run 'apt -y -q purge postfix'
-    dlog "preparing installation of postfix"
-    echo "postfix postfix/mailname string docker" | debconf-set-selections
-    echo "postfix postfix/main_mailer_type select Internet Site" | debconf-set-selections
-    echo "postfix postfix/mynetwork string '127.0.0.0/8 [::ffff:127.0.0.0]/104 [::1]/128'" | debconf-set-selections
-    echo "postfix postfix/destinations string docker, localhost.localdomain, localhost" | debconf-set-selections
-    outlog "package configuration for postfix"
-    run 'debconf-get-selections | grep postfix'
-
-if grep -q 'inet_protocols = all' /etc/postfix/main.cf ; then
-    sed -i 's/inet_protocols = all/inet_protocols = ipv4/' /etc/postfix/main.cf
+dlog "removing old mini-httpd stuff"
+if [ -f /etc/mini-httpd.conf ] ; then
+   mv /etc/mini-httpd.conf /etc/mini-httpd.conf.${INSTDATE}
 fi
-
-###########################################################
-## Configuring MOTD
-###########################################################
-
-#
-# modifying motd
-#
-
-dlog "installing /etc/motd"
-cat > $TMPDIR/motd <<EOF
-
-The programs included with the Debian GNU/Linux system are free software;
-the exact distribution terms for each program are described in the
-individual files in /usr/share/doc/*/copyright.
-
-Debian GNU/Linux comes with ABSOLUTELY NO WARRANTY, to the extent
-permitted by applicable law.
-
-***
-***    DShield Honeypot
-***
-
-EOF
-
-run "mv $TMPDIR/motd /etc/motd"
-run "chmod 644 /etc/motd"
-run "chown root:root /etc/motd"
-
-drun "cat /etc/motd"
-
+if [ -f /etc/default/mini-httpd ] ; then
+   run 'update-rc.d mini-httpd disable'
+   run 'update-rc.d -f mini-httpd remove'
+   mv /etc/default/mini-httpd /etc/default/.mini-httpd.${INSTDATE}
+fi
 
 ###########################################################
 ## Handling of CERTs
 ###########################################################
-## Moving this to entry point so that certs are generated per run.. hostname changes each time
-
-
 #
-# creating PID directory
+# checking / generating certs
+# if already there: ask if generate new
 #
 
-run 'mkdir /var/run/dshield'
+dlog "checking / generating certs"
 
-# rotate dshield firewall logs
-do_copy $progdir/../etc/logrotate.d/dshield /etc/logrotate.d 644
-if [ -f "/etc/cron.daily/logrotate" ]; then
-  run "mv /etc/cron.daily/logrotate /etc/cron.hourly"
-fi 
+GENCERT=1
+if [ ! -f ../etc/CA/ca.serial ]; then
+    echo 01 > ../etc/CA/ca.serial
+fi
+drun "ls ../etc/CA/certs/*.crt 2>/dev/null"
+if [ `ls ../etc/CA/certs/*.crt 2>/dev/null | wc -l ` -gt 0 ]; then
+   # If we have existing certs clean them
+   # cleaning up old certs
+   run 'rm ../etc/CA/certs/*'
+   run 'rm ../etc/CA/keys/*'
+   run 'rm ../etc/CA/requests/*'
+   run 'rm ../etc/CA/index.*'
+   GENCERT=1
+ fi
+
+if [ ${GENCERT} -eq 1 ] ; then
+   dlog "generating new CERTs using ./makecert.sh"
+   ./makecert.sh
+fi
+
+###########################################################
+## Need to make sure all the daemons are running now
+###########################################################
+run "systemctl enable webpy.service"
+run "systemctl enable systemd-networkd.service systemd-networkd-wait-online.service"
+run 'systemctl enable cowrie.service'
+run 'systemctl daemon-reload'
 
 ###########################################################
 ## Done :)
@@ -1086,8 +652,8 @@ outlog
 outlog
 outlog Done. 
 outlog
-# outlog "Please reboot your Pi now."
-# outlog
+outlog "dshield docker instance running."
+outlog
 outlog "For feedback, please e-mail jullrich@sans.edu or file a bug report on github"
 outlog "Please include a sanitized version of /etc/dshield.ini in bug reports"
 outlog "as well as a very carefully sanitized version of the installation log "

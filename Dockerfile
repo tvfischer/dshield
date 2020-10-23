@@ -21,6 +21,7 @@ RUN apt-get update -qq && apt-get install -qqy \
     libswitch-perl \
     libwww-perl \
     net-tools \
+    postfix \
     python3-pip \
     python3-requests \
     python3-dev \
@@ -37,15 +38,16 @@ RUN apt-get update -qq && apt-get install -qqy \
     dialog \
     randomsound \
   # ********* Docker specific additional packages
+    cron \
+    debconf-utils \
+    gettext-base \
     iproute2 \
+    rsyslog \
     systemctl \     
   # ********* Clean ****************************
     && apt-get -qy clean \
        autoremove \
     && rm -rf /var/lib/apt/lists/* 
-
-WORKDIR /usr/src/dshield
-COPY . /usr/src/dshield
 
 ENV TARGETDIR="/srv"
 ENV DSHIELDDIR="${TARGETDIR}/dshield"
@@ -60,7 +62,13 @@ ENV SSHREDIRECT="22"
 ENV TELNETREDIRECT="23 2323"
 ENV WEBREDIRECT="80 8080 7547 5555 9000"
 ENV HONEYPORTS="${SSHHONEYPORT} ${TELNETHONEYPORT} ${WEBHONEYPORT}"
+# Modify this if you want to have auto-update checks enabled inside the running docker image (0 is enabled)
+ENV MANUPDATES="1"
+# Modify this next line if you want to include other localips in the configuration
+ENV localips=""
 
+WORKDIR /usr/src/dshield
+COPY . /usr/src/dshield
 # ********* Now we run the dshield install script (docker version) inside the container
 # ********* Future may move alot of the install parts to 
 RUN bin/install-docker.sh
@@ -72,3 +80,4 @@ RUN bin/install-docker.sh
 # EXPOSE 8000
  
 EXPOSE ${HONEYPORTS}
+ENTRYPOINT [ "docker/dshield-entrypoint.sh" ]

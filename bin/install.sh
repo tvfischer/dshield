@@ -862,37 +862,37 @@ dlog "validifs: ${validifs}"
 
 localnetok=0
 if [ "$INTERACTIVE" == 1 ] ; then
-while [ $localnetok -eq  0 ] ; do
-   dlog "asking user for default interface"
-   exec 3>&1
-   interface=$(dialog --title 'Default Interface' --form 'Default Interface' 10 40 0 \
-      "Honeypot Interface:" 1 2 "$interface" 1 25 15 15 2>&1 1>&3)
-   response=${?}
-   exec 3>&-
-      case ${response} in
-         ${DIALOG_OK})
-            dlog "User input for interface: ${interface}"
-            dlog "check if input is valid"
-            for b in $validifs; do
-               if [ "$b" = "$interface" ] ; then
-                  localnetok=1
+   while [ $localnetok -eq  0 ] ; do
+      dlog "asking user for default interface"
+      exec 3>&1
+      interface=$(dialog --title 'Default Interface' --form 'Default Interface' 10 40 0 \
+         "Honeypot Interface:" 1 2 "$interface" 1 25 15 15 2>&1 1>&3)
+      response=${?}
+      exec 3>&-
+         case ${response} in
+            ${DIALOG_OK})
+               dlog "User input for interface: ${interface}"
+               dlog "check if input is valid"
+               for b in $validifs; do
+                  if [ "$b" = "$interface" ] ; then
+                     localnetok=1
+                  fi
+               done
+               if [ $localnetok -eq 0 ] ; then
+                  dlog "User provided interface ${interface} isn't valid"
+                  dialog --title 'Default Interface Error' --msgbox "You did not specify a valid interface. Valid interfaces are $validifs" 10 40
                fi
-            done
-            if [ $localnetok -eq 0 ] ; then
-               dlog "User provided interface ${interface} isn't valid"
-               dialog --title 'Default Interface Error' --msgbox "You did not specify a valid interface. Valid interfaces are $validifs" 10 40
-            fi
-         ;;
-      ${DIALOG_CANCEL})
-         dlog "User canceled default interface dialogue."
-         exit 5
-         ;;
-      ${DIALOG_ESC})
-         dlog "User pressed ESC in default interface dialogue."
-         exit 5
-         ;;
-   esac
-done # while interface not OK
+            ;;
+         ${DIALOG_CANCEL})
+            dlog "User canceled default interface dialogue."
+            exit 5
+            ;;
+         ${DIALOG_ESC})
+            dlog "User pressed ESC in default interface dialogue."
+            exit 5
+            ;;
+      esac
+   done # while interface not OK
 fi # interactive mode
 dlog "Interface: $interface"
 
@@ -943,51 +943,51 @@ CONIPS=`echo ${CONIPS} | tr ' ' '\n' | egrep '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' 
 dlog "CONIPS with removed duplicates: ${CONIPS}"
 
 if [ "$INTERACTIVE" == 1 ] ; then
-dlog "Getting local network, further IPs and admin ports from user ..."
-while [ $localnetok -eq  0 ] ; do
-   dialog --title 'Local Network and Access' --form "Configure admin access: which ports should be opened (separated by blank, at least sshd (${SSHDPORT})) for the local network, and further trused IPs / networks. All other access from these IPs and nets / to the ports will be blocked. Handle with care, use only trusted IPs / networks." 15 60 0 \
-      "Local Network:" 1 2 "$localnet" 1 18 37 20 \
-      "Further IPs:" 2 2 "${CONIPS}" 2 18 37 60 \
-      "Admin Ports:" 3 2 "${ADMINPORTS}" 3 18 37 20 \
-   2> $TMPDIR/dialog.txt
-   response=${?}
+   dlog "Getting local network, further IPs and admin ports from user ..."
+   while [ $localnetok -eq  0 ] ; do
+      dialog --title 'Local Network and Access' --form "Configure admin access: which ports should be opened (separated by blank, at least sshd (${SSHDPORT})) for the local network, and further trused IPs / networks. All other access from these IPs and nets / to the ports will be blocked. Handle with care, use only trusted IPs / networks." 15 60 0 \
+         "Local Network:" 1 2 "$localnet" 1 18 37 20 \
+         "Further IPs:" 2 2 "${CONIPS}" 2 18 37 60 \
+         "Admin Ports:" 3 2 "${ADMINPORTS}" 3 18 37 20 \
+      2> $TMPDIR/dialog.txt
+      response=${?}
 
-   case ${response} in
-      ${DIALOG_OK})
-         dlog "User input for local network & IPs:"
-         localnet=`head -1 $TMPDIR/dialog.txt`
-         CONIPS=`head -2 $TMPDIR/dialog.txt | tail -1`
-         ADMINPORTS=`tail -1 $TMPDIR/dialog.txt`
-         dlog "user input localnet: ${localnet}"
-         dlog "user input further IPs: ${CONIPS}"
-         dlog "user input further admin ports: ${ADMINPORTS}"
+      case ${response} in
+         ${DIALOG_OK})
+            dlog "User input for local network & IPs:"
+            localnet=`head -1 $TMPDIR/dialog.txt`
+            CONIPS=`head -2 $TMPDIR/dialog.txt | tail -1`
+            ADMINPORTS=`tail -1 $TMPDIR/dialog.txt`
+            dlog "user input localnet: ${localnet}"
+            dlog "user input further IPs: ${CONIPS}"
+            dlog "user input further admin ports: ${ADMINPORTS}"
 
-         # OK (exit loop) if local network OK _AND_ admin ports not empty
-         if [ `echo "$localnet" | egrep '^([0-9]{1,3}\.){3}[0-9]{1,3}\/[0-9]{1,2}$' | wc -l` -eq 1  -a -n "${ADMINPORTS// }" ] ; then
-            localnetok=1
-         fi
+            # OK (exit loop) if local network OK _AND_ admin ports not empty
+            if [ `echo "$localnet" | egrep '^([0-9]{1,3}\.){3}[0-9]{1,3}\/[0-9]{1,2}$' | wc -l` -eq 1  -a -n "${ADMINPORTS// }" ] ; then
+               localnetok=1
+            fi
 
-         if [ $localnetok -eq 0 ] ; then
-            dlog "user provided localnet ${localnet} is not ok or adminports empty (${ADMINPORTS})"
-            dialog --title 'Local Network Error' --msgbox 'The format of the local network is wrong (it has to be in Network/CIDR format, for example 192.168.0.0/16) or the admin portlist is empty (should contain at least the SSHD port (${ADMINPORTS})).' 10 40
-         fi
-      ;;
-      ${DIALOG_CANCEL})
-         dlog "User canceled local network access dialogue."
-         exit 5
+            if [ $localnetok -eq 0 ] ; then
+               dlog "user provided localnet ${localnet} is not ok or adminports empty (${ADMINPORTS})"
+               dialog --title 'Local Network Error' --msgbox 'The format of the local network is wrong (it has to be in Network/CIDR format, for example 192.168.0.0/16) or the admin portlist is empty (should contain at least the SSHD port (${ADMINPORTS})).' 10 40
+            fi
          ;;
-      ${DIALOG_ESC})
-         dlog "User pressed ESC in local network access dialogue."
-         exit 5
-         ;;
-   esac
-done
+         ${DIALOG_CANCEL})
+            dlog "User canceled local network access dialogue."
+            exit 5
+            ;;
+         ${DIALOG_ESC})
+            dlog "User pressed ESC in local network access dialogue."
+            exit 5
+            ;;
+      esac
+   done
 
-dialog --title 'Admin Access' --cr-wrap --msgbox "Admin access to ports:
-${ADMINPORTS}
-will be allowed for IPs / nets:
-${localnet} and
-${CONIPS}" 0 0
+   dialog --title 'Admin Access' --cr-wrap --msgbox "Admin access to ports:
+   ${ADMINPORTS}
+   will be allowed for IPs / nets:
+   ${localnet} and
+   ${CONIPS}" 0 0
 fi # interactive mode
 
 localips="'${CONIPS}'"
@@ -1009,41 +1009,41 @@ fi
 
 dlog "nofwlogging: ${nofwlogging}"
 if [ "$INTERACTIVE" == 1 ] ; then
-dlog "getting IPs from user ..."
+   dlog "getting IPs from user ..."
 
-exec 3>&1
-NOFWLOGGING=$(dialog --title 'IPs to ignore for FW Log'  --form "IPs and nets the firewall should do no logging for (in notation iptables likes, separated by spaces).
-Note: Traffic from these devices will also not be redirected to the honeypot ports.
-" \
-12 70 0 "Ignore FW Log:" 1 1 "${nofwlogging}" 1 17 47 100 2>&1 1>&3)
-response=${?}
-exec 3>&-
+   exec 3>&1
+   NOFWLOGGING=$(dialog --title 'IPs to ignore for FW Log'  --form "IPs and nets the firewall should do no logging for (in notation iptables likes, separated by spaces).
+   Note: Traffic from these devices will also not be redirected to the honeypot ports.
+   " \
+   12 70 0 "Ignore FW Log:" 1 1 "${nofwlogging}" 1 17 47 100 2>&1 1>&3)
+   response=${?}
+   exec 3>&-
 
-case ${response} in
-   ${DIALOG_OK})
-      ;;
-   ${DIALOG_CANCEL})
-      dlog "User canceled IP to ignore in FW log dialogue."
-      exit 5
-      ;;
-   ${DIALOG_ESC})
-      dlog "User pressed ESC in IP to ignore in FW log dialogue."
-      exit 5
-      ;;
-esac
+   case ${response} in
+      ${DIALOG_OK})
+         ;;
+      ${DIALOG_CANCEL})
+         dlog "User canceled IP to ignore in FW log dialogue."
+         exit 5
+         ;;
+      ${DIALOG_ESC})
+         dlog "User pressed ESC in IP to ignore in FW log dialogue."
+         exit 5
+         ;;
+   esac
 
-# for saving in dshield.ini
-nofwlogging="'${NOFWLOGGING}'"
+   # for saving in dshield.ini
+   nofwlogging="'${NOFWLOGGING}'"
 
-dlog "user provided nofwlogging: ${nofwlogging}"
+   dlog "user provided nofwlogging: ${nofwlogging}"
 
-if [ "${NOFWLOGGING}" == "" ] ; then
-   # echo "No firewall log exceptions will be done."
-   dialog --title 'No Firewall Log Exceptions' --msgbox 'No firewall logging exceptions will be installed.' 10 40
-else
-   dialog --title 'Firewall Logging Exceptions' --cr-wrap --msgbox "The firewall logging exceptions will be installed for IPs
-${NOFWLOGGING}" 0 0
-fi
+   if [ "${NOFWLOGGING}" == "" ] ; then
+      # echo "No firewall log exceptions will be done."
+      dialog --title 'No Firewall Log Exceptions' --msgbox 'No firewall logging exceptions will be installed.' 10 40
+   else
+      dialog --title 'Firewall Logging Exceptions' --cr-wrap --msgbox "The firewall logging exceptions will be installed for IPs
+   ${NOFWLOGGING}" 0 0
+   fi
 fi # interactive mode
 ##---------------------------------------------------------
 ## disable honeypot for nets / IPs
@@ -1290,25 +1290,25 @@ fi
 ###########################################################
 
 if [ "$INTERACTIVE" == 1 ] ; then
-dlog "changing port for sshd"
+   dlog "changing port for sshd"
 
-run "sed -i.bak 's/^[#\s]*Port 22\s*$/Port "${SSHDPORT}"/' /etc/ssh/sshd_config"
+   run "sed -i.bak 's/^[#\s]*Port 22\s*$/Port "${SSHDPORT}"/' /etc/ssh/sshd_config"
 
-dlog "checking if modification was successful"
-if [ `grep "^Port ${SSHDPORT}\$" /etc/ssh/sshd_config | wc -l` -ne 1 ] ; then
-   dialog --title 'sshd port' --ok-label 'Understood.' --cr-wrap --msgbox "Congrats, you had already changed your sshd port to something other than 22.
+   dlog "checking if modification was successful"
+   if [ `grep "^Port ${SSHDPORT}\$" /etc/ssh/sshd_config | wc -l` -ne 1 ] ; then
+      dialog --title 'sshd port' --ok-label 'Understood.' --cr-wrap --msgbox "Congrats, you had already changed your sshd port to something other than 22.
 
-Please clean up and either
-  - change the port manually to ${SSHDPORT}
-     in  /etc/ssh/sshd_config    OR
-  - clean up the firewall rules and
-     other stuff reflecting YOUR PORT" 13 50
+   Please clean up and either
+   - change the port manually to ${SSHDPORT}
+      in  /etc/ssh/sshd_config    OR
+   - clean up the firewall rules and
+      other stuff reflecting YOUR PORT" 13 50
 
-   dlog "check unsuccessful, port ${SSHDPORT} not found in sshd_config"
-   drun 'cat /etc/ssh/sshd_config  | grep -v "^\$" | grep -v "^#"'
-else
-   dlog "check successful, port change to ${SSHDPORT} in sshd_config"
-fi
+      dlog "check unsuccessful, port ${SSHDPORT} not found in sshd_config"
+      drun 'cat /etc/ssh/sshd_config  | grep -v "^\$" | grep -v "^#"'
+   else
+      dlog "check successful, port change to ${SSHDPORT} in sshd_config"
+   fi
 fi # interactive
 ###########################################################
 ## Modifying syslog config
