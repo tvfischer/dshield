@@ -1,7 +1,11 @@
 FROM ubuntu:20.04
 LABEL maintainer="Thomas Fischer @Fvt"
 LABEL description="SANS ISC dshield honeypot base image"
-LABEL version="75"
+LABEL version="74"
+
+# Set TZ, can be passed as a variable
+ARG DEBIAN_FRONTEND=noninteractive
+ENV TZ=Etc/UTC
 
 # *********** Installing Prerequisites ***************
 # -qq : No output except for errors
@@ -71,7 +75,7 @@ WORKDIR /usr/src/dshield
 COPY . /usr/src/dshield
 # ********* Now we run the dshield install script (docker version) inside the container
 # ********* Future may move alot of the install parts to 
-RUN bin/install-docker.sh
+#vRUN bin/install-docker.sh
 
 
 # CMD ["bin/install.sh"]
@@ -80,4 +84,5 @@ RUN bin/install-docker.sh
 # EXPOSE 8000
  
 EXPOSE ${HONEYPORTS}
-ENTRYPOINT [ "docker/dshield-entrypoint.sh" ]
+CMD ["/lib/systemd/systemd"]
+# ENTRYPOINT [ "docker/dshield-entrypoint.sh" ]

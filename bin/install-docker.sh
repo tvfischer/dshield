@@ -17,7 +17,7 @@
 
 # version 2020/09/21 01
 
-readonly myversion=75
+readonly myversion=74
 
 #
 # Major Changes (for details see Github):
@@ -336,14 +336,19 @@ drun env
 drun 'df -h'
 outlog "Checking Pre-Requisits"
 
+dshieldinsdir=$PWD/; # We need this so that we can reference bin/ or docker/ in the scripts
 progname=$0;
 progdir=`dirname $0`;
 progdir=$PWD/$progdir;
 
+dlog "dshield install dir: ${dshieldinsdir}"
 dlog "progname: ${progname}"
 dlog "progdir: ${progdir}"
 
 cd $progdir
+
+TMPDIR=`mktemp -d -q /tmp/dshieldinstXXXXXXX`
+dlog "TMPDIR: ${TMPDIR}"
 
 ###########################################################
 ## OS Install Parts
@@ -822,7 +827,8 @@ fi
 # step 3 (Checkout the code)
 # (we will stay with zip instead of using GIT for the time being)
 dlog "downloading and unzipping cowrie"
-run "wget -qO $TMPDIR/cowrie.zip https://www.dshield.org/cowrie.zip"
+#run "wget -qO $TMPDIR/cowrie.zip https://www.dshield.org/cowrie.zip"
+run "curl -Ls -o $TMPDIR/cowrie.zip https://www.dshield.org/cowrie.zip"
 
 
 if [ ${?} -ne 0 ] ; then
@@ -958,7 +964,7 @@ run "mkdir -p ${WEBDIR}"
 do_copy $progdir/../srv/www ${WEBDIR}/../
 do_copy $progdir/../lib/systemd/system/webpy.service /lib/systemd/system/ 644
 run "systemctl enable webpy.service"
-run "systemctl enable systemd-networkd.service systemd-networkd-wait-online.service"
+#run "systemctl enable systemd-networkd.service systemd-networkd-wait-online.service"
 run "systemctl daemon-reload"
 
 # change ownership for web databases to cowrie as we will run the
@@ -1013,10 +1019,11 @@ run 'update-rc.d cowrie defaults'
 ###########################################################
 ## Setting up postfix
 ###########################################################
+# For docker we leave the postfix install here because of required configuration
 
-    outlog "Installing and configuring postfix."
-   #  dlog "uninstalling postfix"
-   #  run 'apt -y -q purge postfix'
+   outlog "Installing and configuring postfix."
+   # dlog "uninstalling postfix"
+   # run 'apt -y -q purge postfix'
     dlog "preparing installation of postfix"
     echo "postfix postfix/mailname string docker" | debconf-set-selections
     echo "postfix postfix/main_mailer_type select Internet Site" | debconf-set-selections
@@ -1024,6 +1031,8 @@ run 'update-rc.d cowrie defaults'
     echo "postfix postfix/destinations string docker, localhost.localdomain, localhost" | debconf-set-selections
     outlog "package configuration for postfix"
     run 'debconf-get-selections | grep postfix'
+   #  dlog "installing postfix"
+   #  run 'apt -y -q install postfix'
 
 if grep -q 'inet_protocols = all' /etc/postfix/main.cf ; then
     sed -i 's/inet_protocols = all/inet_protocols = ipv4/' /etc/postfix/main.cf
@@ -1093,8 +1102,7 @@ outlog "Please include a sanitized version of /etc/dshield.ini in bug reports"
 outlog "as well as a very carefully sanitized version of the installation log "
 outlog "  (${LOGFILE})."
 outlog
-outlog "IMPORTANT: after rebooting, the Pi's ssh server will listen on port ${SSHDPORT}"
-outlog "           connect using ssh -p ${SSHDPORT} $SUDO_USER@$ipaddr"
+outlog "IMPORTANT:  connect using docker exec command to /bin/bash"
 outlog
 outlog "### Thank you for supporting the ISC and dshield! ###"
 outlog

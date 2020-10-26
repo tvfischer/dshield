@@ -16,7 +16,7 @@
 
 # version 2020/09/21 01
 
-readonly myversion=75
+readonly myversion=74
 
 #
 # Major Changes (for details see Github):
@@ -214,12 +214,16 @@ drun env
 drun 'df -h'
 outlog "Checking Pre-Requisits"
 
+dshieldinsdir=$PWD/; # We need this so that we can reference bin/ or docker/ in the scripts
 progname=$0;
-progdir=`dirname $0`;
-progdir=$PWD/$progdir;
+dockerdir=`dirname $0`;
+dockerdir=$PWD/$dockerdir;
+progdir=$PWD/bin/;
 
+dlog "dshield install dir: ${dshieldinsdir}"
 dlog "progname: ${progname}"
 dlog "progdir: ${progdir}"
+dlog "dockerdir: ${dockerdir}"
 
 cd $progdir
 
@@ -633,16 +637,28 @@ if [ `ls ../etc/CA/certs/*.crt 2>/dev/null | wc -l ` -gt 0 ]; then
 
 if [ ${GENCERT} -eq 1 ] ; then
    dlog "generating new CERTs using ./makecert.sh"
-   ./makecert.sh
+   ./makecert-docker.sh
 fi
 
 ###########################################################
 ## Need to make sure all the daemons are running now
+## Stop them first and restart to ensure we have latest config
 ###########################################################
-run "systemctl enable webpy.service"
-run "systemctl enable systemd-networkd.service systemd-networkd-wait-online.service"
-run 'systemctl enable cowrie.service'
-run 'systemctl daemon-reload'
+run 'systemctl stop cowrie.service'
+run "systemctl stop webpy.service"
+run "systemctl stop postfix.service"
+run "systemctl stop postfix@.service"
+run "systemctl stop rsyslog.service"
+run "systemctl stop logrotate.service"
+run "systemctl stop cron.service"
+
+run "systemctl start cron.service"
+run "systemctl start logrotate.service"
+run "systemctl start rsyslog.service"
+run "systemctl start postfix.service"
+run "systemctl start postfix@.service"
+run "systemctl start webpy.service"
+run 'systemctl start cowrie.service'
 
 ###########################################################
 ## Done :)
