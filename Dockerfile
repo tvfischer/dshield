@@ -7,6 +7,7 @@ LABEL version="74"
 ARG DEBIAN_FRONTEND=noninteractive
 ENV TZ=Etc/UTC
 
+
 # *********** Installing Prerequisites ***************
 # -qq : No output except for errors
 RUN apt-get update -qq && apt-get install -qqy \
@@ -46,6 +47,7 @@ RUN apt-get update -qq && apt-get install -qqy \
     debconf-utils \
     gettext-base \
     iproute2 \
+    iptables \
     rsyslog \
     systemctl \     
   # ********* Clean ****************************
@@ -78,11 +80,11 @@ COPY . /usr/src/dshield
 #vRUN bin/install-docker.sh
 
 
-# CMD ["bin/install.sh"]
+RUN /bin/bash -c bin/install-docker.sh
 # EXPOSE 2223
 # EXPOSE 2222
 # EXPOSE 8000
  
 EXPOSE ${HONEYPORTS}
-CMD ["/lib/systemd/systemd"]
+
 # ENTRYPOINT [ "docker/dshield-entrypoint.sh" ]

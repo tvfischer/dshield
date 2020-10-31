@@ -476,6 +476,9 @@ if [ -f /etc/dshield.ini ]; then
    dlog "old dshield.ini follows"
    drun 'cat /etc/dshield.ini'
    run 'mv /etc/dshield.ini /etc/dshield.ini.${INSTDATE}'
+   ## DOCKER: If we map the file in Docker, it doesn't get deleted so it appends only.
+   ## we need to clear it here so that the file is empty
+   drun '> /etc/dshield.ini'
 fi
 
 # new shiny config file LIN 761
@@ -554,61 +557,6 @@ run "echo '-bash: emacs: command not found' > ${TXTCMDS}/usr/bin/emacs"
 run "echo '-bash: locate: command not found' > ${TXTCMDS}/usr/bin/locate"
 
 run 'chown -R cowrie:cowrie ${COWRIEDIR}'
-
-###########################################################
-## Installation of web honeypot
-###########################################################
-
-dlog "installing web honeypot"
-
-if [ -d ${WEBDIR} ]; then
-   dlog "old web honeypot installation found, moving"
-   # TODO: warn user, backup dl etc.
-   run "mv ${WEBDIR} ${WEBDIR}.${INSTDATE}"
-fi
-
-run "mkdir -p ${WEBDIR}"
-
-do_copy $progdir/../srv/www ${WEBDIR}/../
-do_copy $progdir/../lib/systemd/system/webpy.service /lib/systemd/system/ 644
-run "systemctl enable webpy.service"
-run "systemctl enable systemd-networkd.service systemd-networkd-wait-online.service"
-run "systemctl daemon-reload"
-
-# change ownership for web databases to cowrie as we will run the
-# web honeypot as cowrie
-touch ${WEBDIR}/DB/webserver.sqlite
-run "chown cowrie ${WEBDIR}/DB"
-run "chown cowrie ${WEBDIR}/DB/*"
-
-
-###########################################################
-## Copying further system files
-###########################################################
-
-dlog "copying further system files"
-# no longer needed. now done bu /etc/cron.d/dshield
-# do_copy $progdir/../etc/cron.hourly/dshield /etc/cron.hourly 755
-if [ -f /etc/cron.hourly/dshield ]; then
-    run "rm /etc/cron.hourly/dshield"
-fi
-# do_copy $progdir/../etc/mini-httpd.conf /etc/mini-httpd.conf 644
-# do_copy $progdir/../etc/default/mini-httpd /etc/default/mini-httpd 644
-
-
-###########################################################
-## Remove old mini-httpd stuff (if run as an update)
-###########################################################
-
-dlog "removing old mini-httpd stuff"
-if [ -f /etc/mini-httpd.conf ] ; then
-   mv /etc/mini-httpd.conf /etc/mini-httpd.conf.${INSTDATE}
-fi
-if [ -f /etc/default/mini-httpd ] ; then
-   run 'update-rc.d mini-httpd disable'
-   run 'update-rc.d -f mini-httpd remove'
-   mv /etc/default/mini-httpd /etc/default/.mini-httpd.${INSTDATE}
-fi
 
 ###########################################################
 ## Handling of CERTs

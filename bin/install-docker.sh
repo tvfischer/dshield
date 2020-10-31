@@ -495,46 +495,48 @@ run 'echo "HRNGDEVICE=/dev/urandom" > /etc/default/rnd-tools'
 ###########################################################
 ## Handling existing config
 ###########################################################
+# DOCKER: We don't need this. Install is being run at build. The user information is going to be fetched during run.
+#
 
-if [ -f /etc/dshield.ini ] ; then
-   dlog "dshield.ini found, content follows"
-   drun 'cat /etc/dshield.ini'
-   dlog "securing dshield.ini"
-   run 'chmod 600 /etc/dshield.ini'
-   run 'chown root:root /etc/dshield.ini'
-   outlog "reading old configuration"
-   if grep -q 'uid=<authkey>' /etc/dshield.ini; then
-      dlog "erasing <.*> pattern from dshield.ini"
-      run "sed -i.bak 's/<.*>//' /etc/dshield.ini"
-      dlog "modified content of dshield.ini follows"
-      drun 'cat /etc/dshield.ini'
-   fi
-   # believe it or not, bash has a built in .ini parser. Just need to remove spaces around "="
-   source <(grep = /etc/dshield.ini | sed 's/ *= */=/g')
-   dlog "dshield.ini found, content follows"
-   drun 'cat /etc/dshield.ini'
-   dlog "securing dshield.ini"
-   run 'chmod 600 /etc/dshield.ini'
-   run 'chown root:root /etc/dshield.ini'
+# if [ -f /etc/dshield.ini ] ; then
+#    dlog "dshield.ini found, content follows"
+#    drun 'cat /etc/dshield.ini'
+#    dlog "securing dshield.ini"
+#    run 'chmod 600 /etc/dshield.ini'
+#    run 'chown root:root /etc/dshield.ini'
+#    outlog "reading old configuration"
+#    if grep -q 'uid=<authkey>' /etc/dshield.ini; then
+#       dlog "erasing <.*> pattern from dshield.ini"
+#       run "sed -i.bak 's/<.*>//' /etc/dshield.ini"
+#       dlog "modified content of dshield.ini follows"
+#       drun 'cat /etc/dshield.ini'
+#    fi
+#    # believe it or not, bash has a built in .ini parser. Just need to remove spaces around "="
+#    source <(grep = /etc/dshield.ini | sed 's/ *= */=/g')
+#    dlog "dshield.ini found, content follows"
+#    drun 'cat /etc/dshield.ini'
+#    dlog "securing dshield.ini"
+#    run 'chmod 600 /etc/dshield.ini'
+#    run 'chown root:root /etc/dshield.ini'
 
-   # Moved the check userid into the existing dshield.ini file
-   uid=$userid
-   echo "check $userid $apikey"
-   if [ "$userid" == "" ]; then
-	   echo "Docker run mode, dshield.ini has to contain a userid."
-	   exit 9
-   fi
-fi
+#    # Moved the check userid into the existing dshield.ini file
+#    uid=$userid
+#    echo "check $userid $apikey"
+#    if [ "$userid" == "" ]; then
+# 	   echo "Docker run mode, dshield.ini has to contain a userid."
+# 	   exit 9
+#    fi
+# fi
 
-if [ "$email" == "" ]; then
-   echo "Docker run mode, dshield.ini or arguments has to contain an email."
-   exit 9
-fi
+# if [ "$email" == "" ]; then
+#    echo "Docker run mode, dshield.ini or arguments has to contain an email."
+#    exit 9
+# fi
 
-if [ "$apikey" == "" ]; then
-   echo "Docker run mode, dshield.ini or arguments has to contain an apikey."
-   exit 9
-fi
+# if [ "$apikey" == "" ]; then
+#    echo "Docker run mode, dshield.ini or arguments has to contain an apikey."
+#    exit 9
+# fi
 
 ###########################################################
 ## DShield Account
@@ -542,41 +544,41 @@ fi
 #
 # DOCKER:
 # DShield account information will need to be passed via command line or docker-secrets
-#
+#   This will be handled in the entrypoint we are not doing any user/instance configuration durng build
 
 # Let's check the dshield account information is valid
-dlog "Got email ${email} and apikey ${apikey}"
-dlog "Calculating nonce."
-nonce=`openssl rand -hex 10`
-dlog "Calculating hash."
-hash=`echo -n $email:$apikey | openssl dgst -hmac $nonce -sha512 -hex | cut -f2 -d'=' | tr -d ' '`
-dlog "Calculated nonce (${nonce}) and hash (${hash})."
+# dlog "Got email ${email} and apikey ${apikey}"
+# dlog "Calculating nonce."
+# nonce=`openssl rand -hex 10`
+# dlog "Calculating hash."
+# hash=`echo -n $email:$apikey | openssl dgst -hmac $nonce -sha512 -hex | cut -f2 -d'=' | tr -d ' '`
+# dlog "Calculated nonce (${nonce}) and hash (${hash})."
 
-# TODO: urlencode($user)
-user=`echo $email | sed 's/+/%2b/' | sed 's/@/%40/'`
-dlog "Checking API key ..."
-run 'curl -s https://isc.sans.edu/api/checkapikey/$user/$nonce/$hash/$myversion > $TMPDIR/checkapi'
+# # TODO: urlencode($user)
+# user=`echo $email | sed 's/+/%2b/' | sed 's/@/%40/'`
+# dlog "Checking API key ..."
+# run 'curl -s https://isc.sans.edu/api/checkapikey/$user/$nonce/$hash/$myversion > $TMPDIR/checkapi'
 
-dlog "Curl return code is ${?}"
+# dlog "Curl return code is ${?}"
 
-if ! [ -d "$TMPDIR" ]; then
-   # this SHOULD NOT happpen
-   outlog "Can not find TMPDIR ${TMPDIR}"
-   exit 9
-fi
+# if ! [ -d "$TMPDIR" ]; then
+#    # this SHOULD NOT happpen
+#    outlog "Can not find TMPDIR ${TMPDIR}"
+#    exit 9
+# fi
 
-drun "cat ${TMPDIR}/checkapi"
+# drun "cat ${TMPDIR}/checkapi"
 
-dlog "Examining result of API key check ..."
+# dlog "Examining result of API key check ..."
 
-if grep -q '<result>ok</result>' $TMPDIR/checkapi ; then
-   apikeyok=1;
-   uid=`grep  '<id>.*<\/id>' $TMPDIR/checkapi | sed -E 's/.*<id>([0-9]+)<\/id>.*/\1/'`
-   dlog "API key OK, uid is ${uid}"
-else
-   dlog "API key not OK, informing user"
-   exit 5
-fi
+# if grep -q '<result>ok</result>' $TMPDIR/checkapi ; then
+#    apikeyok=1;
+#    uid=`grep  '<id>.*<\/id>' $TMPDIR/checkapi | sed -E 's/.*<id>([0-9]+)<\/id>.*/\1/'`
+#    dlog "API key OK, uid is ${uid}"
+# else
+#    dlog "API key not OK, informing user"
+#    exit 5
+# fi
 
 ###########################################################
 ## Firewall Configuration
@@ -753,48 +755,48 @@ echo "${offset1} ${offset2} * * * root /sbin/reboot" >> /etc/cron.d/dshield
 
 drun 'cat /etc/cron.d/dshield'
 
+# DOCKER: ini file will be configured and build during entrypoint when an instance is run.
+# #
+# # Update dshield Configuration
+# #
+# dlog "creating new /etc/dshield.ini"
+# if [ -f /etc/dshield.ini ]; then
+#    dlog "old dshield.ini follows"
+#    drun 'cat /etc/dshield.ini'
+#    run 'mv /etc/dshield.ini /etc/dshield.ini.${INSTDATE}'
+# fi
 
-#
-# Update dshield Configuration
-#
-dlog "creating new /etc/dshield.ini"
-if [ -f /etc/dshield.ini ]; then
-   dlog "old dshield.ini follows"
-   drun 'cat /etc/dshield.ini'
-   run 'mv /etc/dshield.ini /etc/dshield.ini.${INSTDATE}'
-fi
-
-# new shiny config file
-run 'touch /etc/dshield.ini'
-run 'chmod 600 /etc/dshield.ini'
-run 'echo "[DShield]" >> /etc/dshield.ini'
-run 'echo "interface=$interface" >> /etc/dshield.ini'
-run 'echo "version=$myversion" >> /etc/dshield.ini'
-run 'echo "email=$email" >> /etc/dshield.ini'
-run 'echo "userid=$uid" >> /etc/dshield.ini'
-run 'echo "apikey=$apikey" >> /etc/dshield.ini'
-run 'echo "# the following lines will be used by a new feature of the submit code: "  >> /etc/dshield.ini'
-run 'echo "# replace IP with other value and / or anonymize parts of the IP"  >> /etc/dshield.ini'
-run 'echo "honeypotip=$honeypotip" >> /etc/dshield.ini'
-run 'echo "replacehoneypotip=" >> /etc/dshield.ini'
-run 'echo "anonymizeip=" >> /etc/dshield.ini'
-run 'echo "anonymizemask=" >> /etc/dshield.ini'
-run 'echo "fwlogfile=/var/log/dshield.log" >> /etc/dshield.ini'
-nofwlogging=$(quotespace $nofwlogging)
-run 'echo "nofwlogging=$nofwlogging" >> //etc/dshield.ini'
-CONIPS="$(quotespace $CONIPS)"
-run 'echo "localips=$CONIPS" >> /etc/dshield.ini'
-ADMINPORTS=$(quotespace $ADMINPORTS)
-run 'echo "adminports=$ADMINPORTS" >> /etc/dshield.ini'
-nohoneyips=$(quotespace $nohoneyips)
-run 'echo "nohoneyips=$nohoneyips" >> /etc/dshield.ini'
-nohoneyports=$(quotespace $nohoneyports)
-run 'echo "nohoneyports=$nohoneyports" >> /etc/dshield.ini'
-run 'echo "logretention=7" >> /etc/dshield.ini'
-run 'echo "minimumcowriesize=1000" >> /etc/dshield.ini'
-run 'echo "manualupdates=$MANUPDATES" >> /etc/dshield.ini'
-dlog "new /etc/dshield.ini follows"
-drun 'cat /etc/dshield.ini'
+# # new shiny config file
+# run 'touch /etc/dshield.ini'
+# run 'chmod 600 /etc/dshield.ini'
+# run 'echo "[DShield]" >> /etc/dshield.ini'
+# run 'echo "interface=$interface" >> /etc/dshield.ini'
+# run 'echo "version=$myversion" >> /etc/dshield.ini'
+# run 'echo "email=$email" >> /etc/dshield.ini'
+# run 'echo "userid=$uid" >> /etc/dshield.ini'
+# run 'echo "apikey=$apikey" >> /etc/dshield.ini'
+# run 'echo "# the following lines will be used by a new feature of the submit code: "  >> /etc/dshield.ini'
+# run 'echo "# replace IP with other value and / or anonymize parts of the IP"  >> /etc/dshield.ini'
+# run 'echo "honeypotip=$honeypotip" >> /etc/dshield.ini'
+# run 'echo "replacehoneypotip=" >> /etc/dshield.ini'
+# run 'echo "anonymizeip=" >> /etc/dshield.ini'
+# run 'echo "anonymizemask=" >> /etc/dshield.ini'
+# run 'echo "fwlogfile=/var/log/dshield.log" >> /etc/dshield.ini'
+# nofwlogging=$(quotespace $nofwlogging)
+# run 'echo "nofwlogging=$nofwlogging" >> //etc/dshield.ini'
+# CONIPS="$(quotespace $CONIPS)"
+# run 'echo "localips=$CONIPS" >> /etc/dshield.ini'
+# ADMINPORTS=$(quotespace $ADMINPORTS)
+# run 'echo "adminports=$ADMINPORTS" >> /etc/dshield.ini'
+# nohoneyips=$(quotespace $nohoneyips)
+# run 'echo "nohoneyips=$nohoneyips" >> /etc/dshield.ini'
+# nohoneyports=$(quotespace $nohoneyports)
+# run 'echo "nohoneyports=$nohoneyports" >> /etc/dshield.ini'
+# run 'echo "logretention=7" >> /etc/dshield.ini'
+# run 'echo "minimumcowriesize=1000" >> /etc/dshield.ini'
+# run 'echo "manualupdates=$MANUPDATES" >> /etc/dshield.ini'
+# dlog "new /etc/dshield.ini follows"
+# drun 'cat /etc/dshield.ini'
 
 
 ###########################################################
@@ -962,13 +964,13 @@ fi
 run "mkdir -p ${WEBDIR}"
 
 do_copy $progdir/../srv/www ${WEBDIR}/../
-do_copy $progdir/../lib/systemd/system/webpy.service /lib/systemd/system/ 644
+do_copy $progdir/../lib/systemd/system/webpy-docker.service /lib/systemd/system/webpy.service 644
 run "systemctl enable webpy.service"
 #run "systemctl enable systemd-networkd.service systemd-networkd-wait-online.service"
 run "systemctl daemon-reload"
 
 # change ownership for web databases to cowrie as we will run the
-# web honeypot as cowrie
+# web honeypot as cowrieman cp
 touch ${WEBDIR}/DB/webserver.sqlite
 run "chown cowrie ${WEBDIR}/DB"
 run "chown cowrie ${WEBDIR}/DB/*"
@@ -1011,8 +1013,8 @@ fi
 
 
 # setting up services
-dlog "setting up services: cowrie"
-run 'update-rc.d cowrie defaults'
+# dlog "setting up services: cowrie"
+# run 'update-rc.d cowrie defaults'
 # run 'update-rc.d mini-httpd defaults'
 
 

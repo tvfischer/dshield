@@ -1,0 +1,18 @@
+[Unit]
+Description=DShield Web Honeypot
+After=systemd-networkd-wait-online.service
+Wants=systemd-networkd-wait-online.service
+
+[Service]
+Type=forking
+WorkingDirectory=/srv/www/bin
+User=cowrie
+Group=cowrie
+PIDFile=/srv/cowrie/var/run/webpy.pidgit
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=webpy
+ExecStart=/usr/bin/python3 /srv/www/bin/web.py
+
+[Install]
+WantedBy=multi-user.target
