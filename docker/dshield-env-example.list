@@ -1,0 +1,17 @@
+TARGETDIR="/srv"
+DSHIELDDIR="${TARGETDIR}/dshield"
+COWRIEDIR="${TARGETDIR}/cowrie"
+TXTCMDS=${COWRIEDIR}/share/cowrie/txtcmds
+LOGDIR="${TARGETDIR}/log"
+WEBDIR="${TARGETDIR}/www"
+SSHHONEYPORT=2222
+TELNETHONEYPORT=2223
+WEBHONEYPORT=8000
+SSHREDIRECT="22"
+TELNETREDIRECT="23 2323"
+WEBREDIRECT="80 8080 7547 5555 9000"
+HONEYPORTS="${SSHHONEYPORT} ${TELNETHONEYPORT} ${WEBHONEYPORT}"
+# Modify this if you want to have auto-update checks enabled inside the running docker image (0 is enabled)
+MANUPDATES="1"
+# Modify this next line if you want to include other localips in the configuration
+localips=""
